@@ -13,17 +13,6 @@ source("statprog/GLM/dgp.R")
 
 # Help functions ---------------------------------------------------------------------
 
-learners <- list(gbt = list(
-  model = boost_tree(
-    mode = "regression",
-    trees = tune("trees"),
-    tree_depth = tune("tree_depth"),
-    learn_rate = 0.1
-  ) %>%
-    set_engine("xgboost"),
-  grid = expand_grid(trees = seq.int(25, 500, by = 25), tree_depth = c(3))
-))
-
 lrnr <- function(data) {
   n_hist <- nrow(data)
   if(n_hist >= 5000) {V = 3} else if(n_hist >= 1000) {V = 5} else {V = 10}
@@ -32,7 +21,6 @@ lrnr <- function(data) {
                                dplyr::select(Y, starts_with('W')), 
                              formula = Y ~ .,
                              cv_folds = V,
-                             learners = learners,
                              verbose = 0)
 }
 
@@ -40,20 +28,21 @@ lrnr <- function(data) {
 # Experiment ---------------------------------------------------------------------
 
 experiment_power = function(n_hist,
-                      p=p,
-                      shift_W1=shift_W1, # historical only
-                      shift_U=shift_U, # historical only
-                      dgp_string =c("constant"),
-                      target_effect,
-                      pi = 1/2,
-                      psi_1_func,
-                      dmarginaleffect_1,
-                      dmarginaleffect_0,
-                      r = 3, 
-                      alpha = 0.05,
-                      gamma = 0.8,
-                      initial_n = 100,
-                      increment = 2) {
+                            p=p,
+                            shift_W1=shift_W1, # historical only
+                            shift_U=shift_U, # historical only
+                            dgp_string =c("constant"),
+                            target_effect,
+                            pi = 1/2,
+                            psi_1_func,
+                            dmarginaleffect_1,
+                            dmarginaleffect_0,
+                            r = 3, 
+                            alpha = 0.05,
+                            gamma = 0.8,
+                            initial_n = 100,
+                            increment = 2) {
+  #browser()
   
   outcome_dgp(dgp_string)
   data_hist = dgp(n = n_hist,
@@ -61,7 +50,9 @@ experiment_power = function(n_hist,
                   shift_W1 = shift_W1,
                   shift_U = shift_U) %>% 
     mutate(Y = Y0) %>%
-    dplyr::select(Y, starts_with('W'), m0)
+    dplyr::select(Y, starts_with('W'), m0) %>% 
+    mutate(m0 = link(m0))
+    
   
   if(n_hist >= 5000) {V = 3} else if(n_hist >= 1000) {V = 5} else {V = 10}
   
@@ -84,7 +75,8 @@ experiment_power = function(n_hist,
     target_effect,
     pi,
     hatmu = function(data) {
-      glm(Y ~ ., family = negative.binomial(1/r, link = "log"), data = data %>% dplyr::select(-m0, -predictions))
+      glm(Y ~ ., family = negative.binomial(1/r, link = "log"), 
+          data = data %>% dplyr::select(-m0, -predictions))
     },
     V
   )
@@ -104,7 +96,7 @@ experiment_power = function(n_hist,
     target_effect,
     pi,
     hatmu = function(data) {
-      glm(Y ~ ., family = negative.binomial(1/r, link = "log"), data = data %>% dplyr::select(-predictions))
+      glm(Y ~ ., family = negative.binomial(1/r, link = "log"), data = data %>% dplyr::select(m0, Y))
     },
     V
   )
