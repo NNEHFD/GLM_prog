@@ -18,9 +18,9 @@ library(caret)
 library(ggplot2)
 library(cowplot)
 library(RColorBrewer)
+library(ggpubr)
 
 source("statprog/GLM/dgp.R") # to define zeta as in the dpg.R file
-source("statprog/GLM/estimator.R")
 source("statprog/GLM/experiment_power.R")
 source("statprog/GLM/power.R")
 
@@ -39,7 +39,7 @@ data_vary_both <- db$output_datasets(paste0("data_vary_both_", inc[1]), ext = "r
 
 for (i in 2:length(inc)) {
   data_vary_both <- rbind(data_vary_both,
-  db$output_datasets(paste0("data_vary_both_", inc[i]), ext = "rds") )
+                          db$output_datasets(paste0("data_vary_both_", inc[i]), ext = "rds") )
 }
 
 
@@ -54,18 +54,25 @@ truth_constant <- exp(zeta)
 
 # For the heterogeneous treatment effect scenario the true RR should be found
 # by using a large sample and using the law of large numbers since RR = E[mu1]/E[mu0]
-n <- 6800000
+n <- 6820000
 outcome_dgp(dgp_string = 'heterogeneous')
 dat <- dgp(n,
            p = 7,
            shift_W1 = 0,
            shift_U = 0)
 
-RR_old <- unadjusted_estimator(dat)
+RR_old <- rctglm(formula = Y ~ A,
+                 exposure_indicator = A,
+                 exposure_prob = 1/2,
+                 data = dat,
+                 family = "gaussian",
+                 estimand_fun = "rate_ratio",
+                 verbose = 0,
+                 cv_variance = FALSE)$estimand$Estimate
 norm_diff <- 1
 
 # Set up loop to increase data points
-while (norm_diff > 0.00001) {
+while (norm_diff > 0.0001) {
   n <- n + 10000
   dat_new <- dgp(n,
                  p = 7,
@@ -73,7 +80,14 @@ while (norm_diff > 0.00001) {
                  shift_U = 0)
   
   # Fit the unadjusted estimator
-  RR_new <- unadjusted_estimator(dat_new)
+  RR_new <- rctglm(formula = Y ~ A,
+                   exposure_indicator = A,
+                   exposure_prob = 1/2,
+                   data = dat_new,
+                   family = "gaussian",
+                   estimand_fun = "rate_ratio",
+                   verbose = 0,
+                   cv_variance = FALSE)$estimand$Estimate
   
   # Compute norm difference between old and new coefficients
   norm_diff <- sqrt(sum((RR_new - RR_old)^2))
@@ -84,7 +98,7 @@ while (norm_diff > 0.00001) {
 
 list <- list(coefficients = RR_old, n = n)
 
-truth_het <- list$coefficients$effect
+truth_het <- list$coefficients
 
 # -------------------------------------------------------------------------------------------
 # Determining the oracle variance in the two scenarios
@@ -93,22 +107,55 @@ truth_het <- list$coefficients$effect
 # Determining the oracle variance for the rate ratio in the two scenarios by using the same plug-in estimate method 
 # Constant treatment effect using n from the determination of the true het effect (n=180) 
 
+future::plan(multisession, workers = 90)
+
+# marginal effect as the rate ratio
+RR <- function(psi_1, psi_0) {
+  psi_1/psi_0
+}
+
+# derivatives of marginal effect
+dRR_1 <- function(psi_0) {
+  1/psi_0
+}
+
+dRR_0 <- function(psi_1, psi_0) {
+  -psi_1/psi_0^2
+}
+
+
+mean_IF_1 <- function(A, Y, mu1, pi, psi_1) {
+  (A/pi * (Y - mu1) + (mu1 - psi_1))
+}
+
+mean_IF_0 <- function(A, Y, mu0, pi, psi_0) {
+  ((1 - A)/(1 - pi) * (Y - mu0) + (mu0 - psi_0))
+}
+
+
+marginaleffect_IF <- function(data, pi, psi_1, psi_0) {
+  data %$% {
+    dRR_1(psi_0)*mean_IF_1(A, Y, m1, pi, psi_1) + dRR_0(psi_1, psi_0)*mean_IF_0(A, Y, m0, pi, psi_0)
+  }
+}
+
+
 oracle_var <- function(n, dgp_string) {
   outcome_dgp(dgp_string = dgp_string)
   dat <- dgp(n = n,
              p = 7,
              shift_W1 = 0,
              shift_U = 0)
-  
+
   psi_1 = dat %$% {mean(m1)}
   psi_0 = dat %$% {mean(m0)}
-  
+
   IC <- marginaleffect_IF(dat, pi = 1/2, psi_1, psi_0)
   variance = var(IC)
   se = sqrt(variance/nrow(dat)) %>% as.data.frame()
-  
-  return(se)
+
 }
+
 
 N <- 1000
 
@@ -116,16 +163,18 @@ params = expand_grid(
   n = c(180),
   dgp_string = c("constant"),
 )
-results = 1:N %>% future_map_dfr( ~ params %>% pmap_df(oracle_var), .options = furrr_options(seed = 3021377))
+results = 1:N %>% future_map( ~ params %>% pmap_df(oracle_var), .options = furrr_options(seed = 3021377))
+results %<>% purrr::list_rbind()
 
 oracle_se_constant <- results %>% summarize(est_eff = mean(.))
 
-# Heterogeneous treatment effect using n from the determination of the true het effect (n=1364000) 
+# Heterogeneous treatment
 params = expand_grid(
   n = c(180),
-  dgp_string = c("heterogeneous"),
+  dgp_string = c("heterogeneous")
 )
-results = 1:N %>% future_map_dfr( ~ params %>% pmap_df(oracle_var), .options = furrr_options(seed = 3021377))
+results = 1:N %>% future_map( ~ params %>% pmap_df(oracle_var), .options = furrr_options(seed = 3021377))
+results %<>% purrr::list_rbind()
 
 oracle_se_het <- results %>% summarize(est_eff = mean(.))
 
@@ -134,10 +183,9 @@ oracle_se_het <- results %>% summarize(est_eff = mean(.))
 # -------------------------------------------------------------------------------------------
 # Sample size from variance bound for the two scenarios (power = 0.8)
 # -------------------------------------------------------------------------------------------
-future::plan(multisession, workers = 90)
 N <- 100
 
-## Heterogeneous treatment effect
+# #Heterogeneous treatment effect
 # params = expand_grid(
 #   n_hist = c(4000),
 #   p = c(7),
@@ -146,7 +194,7 @@ N <- 100
 #   dgp_string = c("heterogeneous"),
 #   target_effect = truth_het,
 #   pi = 1/2,
-#   r = 1, 
+#   r = 1,
 #   alpha = 0.025,
 #   gamma = 0.9,
 #   initial_n = 20,
@@ -160,7 +208,7 @@ N <- 100
 ss <- db$output_datasets("data_ss_het", ext = "rds")
 ss_het <- ss %>% group_by(estr, prog) %>% summarize(est_eff = mean(n))
 
-
+future::plan(sequential)
 # -------------------------------------------------------------------------------------------
 # Defining a function for finding the results
 # -------------------------------------------------------------------------------------------
@@ -169,15 +217,15 @@ ss_het <- ss %>% group_by(estr, prog) %>% summarize(est_eff = mean(n))
 res <- function(results, truth = truth_het, alpha = 0.05) {
   results %>%
     summarize(
-      est_eff = mean(effect),
-      emp_se = sd(effect),
-      bias = mean(effect - truth),
-      bias_thing = mean((effect - truth)/emp_se),
-      mean_est_se = mean(se),
-      rmse = sqrt(mean((effect - truth) ^ 2)),
-      power = mean(abs((effect - 1) / se) > - qnorm(alpha/2)),
-      coverage = mean(((qnorm(alpha/2) * se + effect) < truth) &
-                        (truth < (-qnorm(alpha/2) * se + effect)))
+      est_eff = mean(Estimate),
+      emp_se = sd(Estimate),
+      bias = mean(Estimate - truth),
+      #bias_thing = mean((Estimate - truth)/emp_se),
+      mean_est_se = mean(`Std. Error`),
+      rmse = sqrt(mean((Estimate - truth) ^ 2)),
+      power = mean(2*(1 - pnorm(abs((Estimate - 1) / `Std. Error`))) < alpha),
+      coverage = mean(((qnorm(alpha/2) * `Std. Error` + Estimate) < truth) &
+                        (truth < (-qnorm(alpha/2) * `Std. Error` + Estimate)))
       
     )
 }
@@ -203,9 +251,9 @@ results <- rbind(data_het %>% mutate(scenario = 'het'),
 tab <- results %>% group_by(scenario, estr, prog, shift_W1, shift_U) %>% res()
 
 tab %<>% rbind(data_constant %>%
-  mutate(scenario = 'constant') %>% 
-  group_by(scenario, estr, prog, shift_W1, shift_U) %>% 
-  res(truth = truth_constant))
+                 mutate(scenario = 'constant') %>% 
+                 group_by(scenario, estr, prog, shift_W1, shift_U) %>% 
+                 res(truth = truth_constant))
 
 tab <- tab %>%
   mutate(scenario = case_when(
@@ -222,11 +270,13 @@ tab <- tab %>%
     estr == "unadjusted" & prog == "none" ~ "Unadjusted",
     TRUE ~ NA_character_
   )) %>%
+  mutate(shift = shift_W1 + shift_U) %>%
   group_by(scenario) %>%
-  dplyr::select(-prog) %>%  # Removing the 'estr' and 'prog' columns
-  arrange(scenario, match(estr, c("Unadjusted", "GLM", "GLM with non-informative prognostic score", "GLM with Super Learner prognostic score", "GLM with oracle prognostic score")))  # Reordering the dataframe based on 'estr_prog
+  dplyr::select(-prog, -shift_W1, -shift_U) %>%  # Removing the 'estr' and 'prog' columns
+  dplyr::select(scenario, estr, shift, est_eff, bias, everything()) %>% 
+  arrange(scenario, shift, match(estr, c("Unadjusted", "GLM", "GLM with non-informative prognostic score", "GLM with Super Learner prognostic score", "GLM with oracle prognostic score")))  # Reordering the dataframe based on 'estr_prog
 
-
+print(xtable(tab), include.rownames = FALSE)
 
 
 # -------------------------------------------------------------------------------------------
@@ -290,7 +340,7 @@ results_obs$estimator <- factor(c(
   'GLM_w/oracle'  # Ensure this is the last level
 ))
 
-p1 <- ggplot(results_obs, aes(x = estimator, y = se, fill = estimator)) +
+p1 <- ggplot(results_obs, aes(x = estimator , y = `Std..Error`, fill = estimator)) +
   geom_violin(trim = TRUE) +
   scale_fill_manual(values = custom_colors, labels = custom_labels) +
   theme_minimal() +
@@ -343,7 +393,7 @@ results_unobs$estimator <- factor(c(
   'GLM_w/oracle'  # Ensure this is the last level
 ))
 
-p2 <- ggplot(results_unobs, aes(x = estimator, y = se, fill = estimator)) +
+p2 <- ggplot(results_unobs, aes(x = estimator, y = `Std..Error`, fill = estimator)) +
   geom_violin(trim = TRUE) +
   scale_fill_manual(values = custom_colors, labels = custom_labels) +
   theme_minimal() +
@@ -366,6 +416,7 @@ p2 <- ggplot(results_unobs, aes(x = estimator, y = se, fill = estimator)) +
     y = "Estimated standard error",
     x = "Estimator"
   )
+
 
 # -------------------------------------------------------------------------------------------
 # Combined plot
@@ -652,28 +703,6 @@ print(combined_plot)
 db$exportOutput(combined_plot, "GLM_power_cov", Format = "pdf", FgHeight = 18, FgWidth = 29)
 db$exportOutput(combined_plot, "GLM_power_cov", Format = "jpeg", FgHeight = 18, FgWidth = 29)
 
-
-# -------------------------------------------------------------------------------------------
-# SE plot for varying both
-# -------------------------------------------------------------------------------------------
-
-tab <- data_vary_both %>% 
-  mutate(estimator = case_when(estr == "unadjusted" ~ "unadjusted",
-                               estr == "glm" & prog == "none" ~ "GLM",
-                               estr == "glm" & prog == "fit random" ~ "GLM_w/rand_prog",
-                               estr == "glm" & prog == "fit" ~ "GLM_w/prog",
-                               estr == "glm" & prog == "oracle" ~ "GLM_w/oracle")) %>% 
-  group_by(n_trial, estimator, estr, prog) %>% 
-  res()
-
-p.pwr <- tab %>%
-  ggplot(aes(x = n_trial, y = emp_se, color = estimator)) +
-  geom_line(aes(linetype = ifelse(prog == "fit random", "solid", "dashed"))) +
-  xlab("n") +
-  ylab("Empirically estimated SE") +
-  labs(color = "", linetype = "") +
-  theme_minimal() +
-  coord_cartesian(xlim = c(100, 500), ylim = c(0.1, 0.3))
 
 
 
