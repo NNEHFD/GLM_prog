@@ -73,7 +73,7 @@ variance_bound <- function(data,
       data$predictions[cv == i] <- predict(fit, test.data, type = "response")
     }
     
-    }
+  }
   
   
   
@@ -92,18 +92,18 @@ variance_bound <- function(data,
 
 # function to determine sample size from variance bound ----------------------------------
 calc_power <- function(alpha, target_effect, variance, n){
-   f0 <- qnorm(1 - alpha/2, mean = 1, sd = sqrt(variance / n))
-   f1 <- pnorm(f0, mean = target_effect, sd = sqrt(variance / n))
-   1 - f1
+  f0 <- qnorm(1 - alpha/2, mean = 1, sd = sqrt(variance / n))
+  f1 <- pnorm(f0, mean = target_effect, sd = sqrt(variance / n))
+  1 - f1
 }
 
 
 sample_size_glm <- function(target_effect, 
-                        variance,
-                        alpha = 0.05,
-                        gamma = 0.8,
-                        initial_n = 1,
-                        increment = 2) {
+                            variance,
+                            alpha = 0.05,
+                            gamma = 0.8,
+                            initial_n = 1,
+                            increment = 2) {
   power <- 0
   n <- initial_n
   
