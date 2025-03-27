@@ -7,26 +7,23 @@
 #
 # -------------------------------------------------------------------------------------------
 
-
-# Load libraries ---------------------------------------------------------
+#install postcard
 ## install PostCard package
 # install.packages("pak")
 # library(pak)
 # pak::pak("NNpackages/PostCard")
 
-#Load library
-library(PostCard)
-# withr::local_seed(1395878)
-withr::local_options(list(PostCard.verbose = 0))
+# Load libraries ---------------------------------------------------------
 library(data.table)
 library(tidyverse)
 library(magrittr)
 library(MASS)
+library(PostCard)
 
 
 # Define link function  ------------------------------------------------------------
 # define parameters
-zeta <- 0.2320906
+zeta <- 0.2425194
 
 # define link function
 inverse_canonical_link <- function(x) {
@@ -54,6 +51,7 @@ outcome_dgp <- function(dgp_string = 'constant') {
       X %$%
         {
           4.1 * sin((abs(W2))) +
+            2 * W4 +
             as.numeric(abs(W3) > 2.5) * 1.4 +
             as.numeric(abs(W4) > 0.25) * 1.5 +
             1.5 * sin(abs(W5)) -
@@ -78,6 +76,7 @@ outcome_dgp <- function(dgp_string = 'constant') {
       X %$%
         {
           4.1 * sin((abs(W2))) +
+            2 * W4 +
             as.numeric(abs(W3) > 2.5) * 1.4 +
             as.numeric(abs(W4) > 0.25) * 1.5 +
             1.5 * sin(abs(W5)) -
@@ -93,6 +92,7 @@ outcome_dgp <- function(dgp_string = 'constant') {
       X %$%
         {
           5.3 * sin((abs(W2)))^2 +
+            2.6 * W4 +
             as.numeric(abs(W3) > 2.5) * 1.4 +
             as.numeric(abs(W4) > 0.25) * 1.3 +
             4.1 * as.numeric(W2 > 0) * sin(abs(W5)) +
@@ -137,7 +137,7 @@ dgp = function(n,
   
   # Generate the full dataset
   matrix(runif(n * (p - 5), 1, 2), ncol = (p - 5)) %>% # Generate covariates W6-Wp
-    as_tibble(name_repair = 'universal') %>%
+    as.data.frame(check.names = FALSE) %>%
     set_names(str_c("W", 6:(p))) %>%
     tibble(U, W1, W2, W3, W4, W5) %>%
     inset("m0", value = mu0(.)) %>%
@@ -160,24 +160,24 @@ dat <- dgp(n = 100)
 
 outcome_dgp(dgp_string = 'heterogeneous')
 
-dat <- dgp(n = 10000)
+dat1 <- dgp(n = 10000)
 
-dat %>% filter(Y == 0)
-dat %>% filter(A == 1 & Y == 0)
-dat %>% filter(A == 0 & Y == 0)
+dat1 %>% filter(Y == 0)
+dat1 %>% filter(A == 1 & Y == 0)
+dat1 %>% filter(A == 0 & Y == 0)
 
 # Check the skewness ----------------------------------------------------------
 
-ggplot(dat %>% filter(A == 1), aes(x = Y)) +
+ggplot(dat1 %>% filter(A == 1), aes(x = Y)) +
   geom_histogram(binwidth = 1, fill = "lightblue", color = "black") +
   labs(title = "Histogram of Variable Y", x = "Y", y = "Frequency")
 
 
-ggplot(dat %>% filter(A == 0), aes(x = Y)) +
+ggplot(dat1 %>% filter(A == 0), aes(x = Y)) +
   geom_histogram(binwidth = 1, fill = "lightblue", color = "black") +
   labs(title = "Histogram of Variable Y", x = "Y", y = "Frequency")
 
-ggplot(dat, aes(x = Y)) +
+ggplot(dat1, aes(x = Y)) +
   geom_histogram(binwidth = 1, fill = "lightblue", color = "black") +
   labs(title = "Histogram of Variable Y", x = "Y", y = "Frequency")
 
@@ -185,20 +185,21 @@ ggplot(dat, aes(x = Y)) +
 library(e1071)
 skewness(dat$Y)
 
-
-#n <- 6800000
-#outcome_dgp(dgp_string = 'heterogeneous')
-#dat <- dgp(n,
+# 
+# n <- 6800000
+# outcome_dgp(dgp_string = 'heterogeneous')
+# dat <- dgp(n,
 #           p = 7,
 #           shift_W1 = 0,
 #           shift_U = 0) %>% as.data.frame()
-
-
-#RR <- rctglm(formula = Y ~ A,
-#             group_indicator = A,
+# 
+# 
+# RR <- rctglm(formula = Y ~ A,
+#             exposure_indicator = A,
+#             exposure_prob = 1/2,
 #             data = dat,
 #             family = negative.binomial(3, link = "log"),
 #             estimand_fun = "rate_ratio")
-
-
-#estimand(RR)
+# 
+# 
+# estimand(RR)
