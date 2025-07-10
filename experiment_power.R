@@ -17,9 +17,9 @@ lrnr <- function(data) {
   n_hist <- nrow(data)
   if(n_hist >= 5000) {V = 3} else if(n_hist >= 1000) {V = 5} else {V = 10}
   
-  PostCard::fit_best_learner(data = data %>% 
+  postcard::fit_best_learner(data = data %>% 
                                dplyr::select(Y, starts_with('W')), 
-                             formula = Y ~ .,
+                             preproc = list(formula = Y ~ .),
                              cv_folds = V,
                              verbose = 0)
 }
