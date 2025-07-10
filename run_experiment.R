@@ -14,7 +14,7 @@ library(magrittr)
 library(tidyverse)
 library(furrr)
 library(NNaccess)
-library(PostCard)
+library(postcard)
 
 db <- NNaccess::nnaccess(project = "students", trial = "ehfd_phd", instance = "current")
 
