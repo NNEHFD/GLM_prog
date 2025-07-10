@@ -7,18 +7,12 @@
 #
 # -------------------------------------------------------------------------------------------
 
-#install postcard
-## install PostCard package
-# install.packages("pak")
-# library(pak)
-# pak::pak("NNpackages/PostCard")
-
 # Load libraries ---------------------------------------------------------
 library(data.table)
 library(tidyverse)
 library(magrittr)
 library(MASS)
-library(PostCard)
+library(postcard)
 
 
 # Define link function  ------------------------------------------------------------
