@@ -26,9 +26,9 @@ experiment = function(n_hist, n_trial,
 
   if(n_hist >= 5000) {V = 3} else if(n_hist >= 1000) {V = 5} else {V = 10}
 
-  lrnr = PostCard::fit_best_learner(data = data_hist %>%
+  lrnr = postcard::fit_best_learner(data = data_hist %>%
                                       dplyr::select(Y, starts_with('W')),
-                                    formula = Y ~ .,
+                                    preproc = list(mod = Y ~ .),
                                     cv_folds = V,
                                     #learners = default_learners,
                                     verbose = 0)
@@ -56,21 +56,21 @@ experiment = function(n_hist, n_trial,
       dplyr::select(
         -prog,
         -m0) %>%
-      rctglm(formula = Y ~ A,
+      postcard::rctglm(formula = Y ~ A,
              exposure_indicator = A,
              exposure_prob = 1/2, 
              family = "gaussian",
              estimand_fun = "rate_ratio",
              verbose = 0,
              cv_variance = FALSE) %>% 
-      estimand() %>% 
+      postcard::estimand() %>% 
       mutate(prog="none", estr="unadjusted"),
     #No prognostic score but glm adjusted with W
     data_trial %>% 
       dplyr::select(
         -prog,
         -m0) %>%
-      rctglm(formula = Y ~ .,
+      postcard::rctglm(formula = Y ~ .,
              exposure_indicator = A,
              exposure_prob = 1/2, 
              family = negative.binomial(1/3, link = "log"),
@@ -78,7 +78,7 @@ experiment = function(n_hist, n_trial,
              verbose = 0,
              cv_variance = cv, 
              cv_variance_folds = 10) %>% 
-      estimand() %>% 
+      postcard::estimand() %>% 
       mutate(prog="none", estr="glm"),
     # Random/non-informative prognostic score 
     data_trial %>% 
@@ -86,7 +86,7 @@ experiment = function(n_hist, n_trial,
         -prog,
         -m0) %>%
       mutate(prog = runif(nrow(data_trial), min = 0, max = 10)) %>%
-      rctglm(formula = Y ~ .,
+      postcard::rctglm(formula = Y ~ .,
              exposure_indicator = A,
              exposure_prob = 1/2, 
              family = negative.binomial(3, link = "log"),
@@ -94,12 +94,12 @@ experiment = function(n_hist, n_trial,
              verbose = 0,
              cv_variance = cv, 
              cv_variance_folds = 10) %>% 
-      estimand() %>% 
+      postcard::estimand() %>% 
       mutate(prog="fit random", estr="glm"),
     #Prognostic score
     data_trial %>%
       dplyr::select(-m0) %>%
-      rctglm(formula = Y ~ .,
+      postcard::rctglm(formula = Y ~ .,
              exposure_indicator = A,
              exposure_prob = 1/2, 
              family = negative.binomial(3, link = "log"),
@@ -107,12 +107,12 @@ experiment = function(n_hist, n_trial,
              verbose = 0,
              cv_variance = cv,
              cv_variance_folds = 10) %>%
-      estimand() %>%
+      postcard::estimand() %>%
       mutate(prog="fit", estr="glm"),
     # Oracle prognostic score
     data_trial %>% 
       dplyr::select(m0, A, Y) %>%
-      rctglm(formula = Y ~ .,
+      postcard::rctglm(formula = Y ~ .,
              exposure_indicator = A,
              exposure_prob = 1/2, 
              family = negative.binomial(3, link = "log"),
@@ -120,7 +120,7 @@ experiment = function(n_hist, n_trial,
              verbose = 0,
              cv_variance = cv,
              cv_variance_folds = 10) %>% 
-      estimand() %>% 
+      postcard::estimand() %>% 
       mutate(prog="oracle", estr="glm")
   ) %>%
     mutate(
