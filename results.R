@@ -185,28 +185,28 @@ oracle_se_het <- results %>% summarize(est_eff = mean(.))
 # -------------------------------------------------------------------------------------------
 N <- 100
 
-# #Heterogeneous treatment effect
-# params = expand_grid(
-#   n_hist = c(4000),
-#   p = c(7),
-#   shift_W1 = c(0), # shift in historical data only
-#   shift_U = c(0), # shift in historical data only
-#   dgp_string = c("heterogeneous"),
-#   target_effect = truth_het,
-#   pi = 1/2,
-#   r = 1,
-#   alpha = 0.025,
-#   gamma = 0.9,
-#   initial_n = 20,
-#   increment = 2
-# )
-# results = 1:N %>% future_map_dfr( ~ params %>% pmap_df(experiment_power), .options = furrr_options(seed = 3021377))
-# 
-# 
-# db$output_datasets("data_ss_het", results, ext = "rds")
+#Heterogeneous treatment effect
+params = expand_grid(
+  n_hist = c(4000),
+  p = c(7),
+  shift_W1 = c(0), # shift in historical data only
+  shift_U = c(0), # shift in historical data only
+  dgp_string = c("heterogeneous"),
+  target_effect = truth_het,
+  pi = 1/2,
+  r = 3,
+  alpha = 0.025,
+  gamma = 0.9,
+  initial_n = 20,
+  increment = 2
+)
+results = 1:N %>% future_map_dfr( ~ params %>% pmap_df(experiment_power), .options = furrr_options(seed = 3021377))
+
+
+db$output_datasets("data_ss_het", results, ext = "rds")
 
 ss <- db$output_datasets("data_ss_het", ext = "rds")
-ss_het <- ss %>% group_by(estr, prog) %>% summarize(est_eff = mean(n))
+ss_het <- ss %>% group_by(estr, prog) %>% summarize(est_eff = ceiling(mean(n))) 
 
 future::plan(sequential)
 # -------------------------------------------------------------------------------------------
