@@ -46,9 +46,7 @@ calc_power <- function(target_effect, variance, n, alpha=0.05){
 sample_size_glm <- function(target_effect, 
                             variance,
                             alpha = 0.05,
-                            power = 0.8,
-                            initial_n = 1,
-                            increment = 2) {
+                            power = 0.8) {
   # Analytic solution for normal approximation
   z_alpha <- qnorm(1 - alpha/2)
   z_beta <- qnorm(power)
