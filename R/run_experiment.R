@@ -13,19 +13,22 @@ library(tidymodels)
 library(magrittr)
 library(tidyverse)
 library(furrr)
-library(NNaccess)
 library(postcard)
 
-db <- NNaccess::nnaccess(project = "students", trial = "ehfd_phd", instance = "current")
+source("R/dgp.R")
+source("R/experiment.R")
 
-source("statprog/GLM/dgp.R")
-source("statprog/GLM/experiment.R")
+# Define output directory
+output_dir <- file.path("..", "outputs", "datasets")
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE)
+}
 
 
 # setting up the parallel processing ----------------------------------------
 # future::plan(multisession, workers = 90)
 # furrr_options(seed = TRUE)
-N <- 500
+N <- 25
 set.seed(455321)
 
 # print("init")
@@ -36,8 +39,7 @@ set.seed(455321)
 # Constant treatment effect - no shift
 params = expand_grid(
   n_hist = c(4000),
-  n_trial = c(180),
-  p = c(7),
+  n_trial = c(200),
   shift_W1 = c(0), # shift in historical data only
   shift_U = c(0), # shift in historical data only
   dgp_string = c("constant")
@@ -45,15 +47,14 @@ params = expand_grid(
 results = 1:N %>% map( ~ params %>% pmap(experiment), .options = furrr_options(seed = 3021377))
 results %<>% purrr::list_flatten() %>% purrr::list_rbind()
 
-db$output_datasets("data_constant_cv", results, ext = "rds")
+saveRDS(results, file.path(output_dir, "data_constant_cv.rds"))
 print("constant")
 
 
 # Heterogeneous - no shift
 params = expand_grid(
   n_hist = c(4000),
-  n_trial = c(180),
-  p = c(7),
+  n_trial = c(200),
   shift_W1 = c(0),
   shift_U = c(0),
   dgp_string = c("heterogeneous")
@@ -61,14 +62,13 @@ params = expand_grid(
 results = 1:N %>% map( ~ params %>% pmap(experiment), .options = furrr_options(seed = 3021377))
 results %<>% purrr::list_flatten() %>% purrr::list_rbind()
 
-db$output_datasets("data_het_cv", results, ext = "rds")
+saveRDS(results, file.path(output_dir, "data_het_cv.rds"))
 print("het")
 
 # Heterogeneous - observable shift in W1 (small and large)
 params = expand_grid(
   n_hist = c(4000),
-  n_trial = c(180),
-  p = c(7),
+  n_trial = c(200),
   shift_W1 = c(-3, -5),
   shift_U = c(0),
   dgp_string = c("heterogeneous")
@@ -76,15 +76,14 @@ params = expand_grid(
 results = 1:N %>% map( ~ params %>% pmap(experiment), .options = furrr_options(seed = 3021377))
 results %<>% purrr::list_flatten() %>% purrr::list_rbind()
 
-db$output_datasets("data_obs_shift_cv", results, ext = "rds")
+saveRDS(results, file.path(output_dir, "data_obs_shift_cv.rds"))
 
 print("obs_shift")
 
 # Heterogeneous - unobservable shift in U (small and large)
 params = expand_grid(
   n_hist = c(4000),
-  n_trial = c(180),
-  p = c(7),
+  n_trial = c(200),
   shift_W1 = c(0),
   shift_U = c(.5, 1),
   dgp_string = c("heterogeneous")
@@ -92,7 +91,7 @@ params = expand_grid(
 results = 1:N %>% map( ~ params %>% pmap(experiment), .options = furrr_options(seed = 3021377))
 results %<>% purrr::list_flatten() %>% purrr::list_rbind()
 
-db$output_datasets("data_unobs_shift_cv", results, ext = "rds")
+saveRDS(results, file.path(output_dir, "data_unobs_shift_cv.rds"))
 
 print("unobs_shift")
 
@@ -146,7 +145,7 @@ for (i in 1:length(inc)) {
   results = 1:N %>% future_map( ~ params %>% pmap(experiment), .options = furrr_options(seed = 3021377))
   results %<>% purrr::list_flatten() %>% purrr::list_rbind()
 
-  db$output_datasets(paste0("data_vary_both_cv", inc[i]), results, ext = "rds")
+  saveRDS(results, file.path(output_dir, paste0("data_vary_both_cv_", inc[i], ".rds")))
 }
 
 
