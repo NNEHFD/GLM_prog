@@ -59,7 +59,7 @@ draw.dgp <- function(dgp, n, ...) {
       # main = 0.1 + 3/2*hinge(W1) + W2^2 + hinge(W1*W4),
       # inter = 3/2*hinge(W3,-2),
       # het = 2*W4^2,
-      main = 0.1 + 3/2*hinge(W1,-1) + W2^2 + hinge(W1*W4),
+      main = 0.1 + 2*hinge(W1,-1) + W2^2 + hinge(W1*W4),
       inter = hinge(W3,-2),
       het = 2*hinge(W4),
       m0 = main + abs(U) * inter,
@@ -70,8 +70,12 @@ draw.dgp <- function(dgp, n, ...) {
         inverse_canonical_link(dgp$zeta + link(m0 + het))
       },
       A = rbinom(n, 1, prob = 0.5),
-      Y0 = rbinom(n, size = 2*floor(m0), prob = 1/2) + rbinom(n, 1, prob = rem(m0)),
-      Y1 = rbinom(n, size = 2*floor(m1), prob = 1/2) + rbinom(n, 1, prob = rem(m1)),
+      # Y0 = rnbinom(n, size=2, mu=m0),
+      # Y1 = rnbinom(n, size=2, mu=m1),
+      Y0 = rpois(n, lambda = m0),
+      Y1 = rpois(n, lambda = m1),
+      # Y0 = rbinom(n, size = 2*floor(m0), prob = 1/2) + rbinom(n, 1, prob = rem(m0)),
+      # Y1 = rbinom(n, size = 2*floor(m1), prob = 1/2) + rbinom(n, 1, prob = rem(m1)),
       Y = if_else(A == 1, Y1, Y0)
     ) |>
     dplyr::select(-main, -inter, -het)
